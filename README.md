@@ -18,11 +18,11 @@ For CUDA, install the PyTorch build for your GPU using the [official installer](
 
 Open the repository in PyCharm, select the Python environment, and run `run.py`. Its `EXPERIMENT` setting selects one of the following entry points. The CSV is included in `data/`, and paths are resolved relative to the code.
 
-| Entry point | Experiments | Encoder configuration |
+| Entry point | Experiments |
 | --- | --- | --- |
-| `main` | Full-spectrum residual GAT + LightGBM; configurable ablation, k sensitivity, and waveband experiments | Maximum 50 epochs; patience 5; downstream validation every epoch |
-| `analysis` | Feature ablation, k sensitivity, 16/32/48-waveband comparisons, visible/NIR comparisons, and spectral LightGBM | Analysis configuration: 5 epochs; cosine schedule 50; checkpoint evaluation at epoch 1, every 5 epochs, and the final epoch |
-| `baselines` | GraphSAGE, GCN, GIN, and standard GAT | Recorded comparator configuration: 5 epochs; original per-model settings |
+| `main` | Full-spectrum residual GAT + LightGBM; configurable ablation, k sensitivity, and waveband experiments |
+| `analysis` | Feature ablation, k sensitivity, 16/32/48-waveband comparisons, visible/NIR comparisons, and spectral LightGBM | 
+| `baselines` | GraphSAGE, GCN, GIN, and standard GAT |
 
 The main model and analysis experiments have separate training configurations. Each entry point records its own configuration and outputs. Change settings in the corresponding `experiments/<entry>/config.py`. In the main-model launcher, set `EXPERIMENTS = ["all"]` to run all its experiment groups.
 
