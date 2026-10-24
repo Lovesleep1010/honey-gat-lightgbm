@@ -56,12 +56,6 @@ The unmodified dataset is distributed with attribution under CC BY 4.0. Its sour
 
 The experiments use five concentration classes: 0%, 5%, 10%, 25%, and 50%. The fixed cohort filter excludes `Brand=C4`, `Class=ManukaUMF10`, `Concentration_Class=50`. After filtering, Acquisitions 1–4 contain 5600 training spectra, Acquisition 5 contains 1400 validation spectra, and Acquisition 6 contains 1400 test spectra, each with 128 wavelengths.
 
-Correlation graphs are estimated from Acquisitions 1–4. Checkpoint selection, waveband selection, LightGBM stopping, and threshold calibration use Acquisition 5. The encoder is then fixed, and the final LightGBM is refitted on Acquisitions 1–5 before test evaluation. GNN comparators retain their three node features and embedding-only LightGBM inputs; the residual model uses four node features and combines its embedding with six raw-spectrum statistics.
-
-The final main-model LightGBM uses a maximum of 3000 boosting rounds, a learning rate of 0.01, 31 leaves, and early stopping with a patience of 100 rounds on Acquisition 5 multiclass log loss. The 500-round LightGBM probe is used for encoder checkpoint selection. Comparator-specific parameters are defined in `experiments/baselines/baseline_config.py`.
-
-Accuracy, balanced accuracy, macro-F1, and class-0 recall are saved. Repeated-run summaries use the sample standard deviation (`ddof=1`). Defaults use seeds 42, 123, 2024, 3407, and 9999.
-
 ## Checks
 
 ```bash
