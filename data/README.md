@@ -6,7 +6,6 @@
 - Original file: https://ndownloader.figshare.com/files/30455640
 - Licence: [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
 - File: `adulteration_dataset_26_08_2021.csv`
-- Size: 13,248,930 bytes
-- MD5 reported by Figshare: `87e761a3b08fe24be73a19d6334c3295`
+
 
 The CSV is redistributed without modification. Label selection and the fixed C4/ManukaUMF10/50% exclusion are applied in the Python data loader. Cite the dataset creators and retain this attribution when reusing the data. The project's MIT licence applies to project code; this dataset is licensed under CC BY 4.0.
