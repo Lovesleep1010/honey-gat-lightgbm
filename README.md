@@ -1,72 +1,29 @@
 # Honey classification with residual GAT and LightGBM
-This repository contains the code for our manuscript “Cross-acquisition hyperspectral modelling for honey adulteration using wavelength-graph representation and reduced-waveband analysis”, submitted to Chemometrics and Intelligent Laboratory Systems.
 
-Python implementation of residual GAT + LightGBM for hyperspectral honey-adulteration classification. The repository includes feature ablation, correlation-neighbour sensitivity, wavelength attribution, reduced-waveband experiments, spectral LightGBM, and four GNN comparators.
+Code for “Cross-acquisition hyperspectral modelling for honey adulteration using wavelength-graph representation and reduced-waveband analysis”, submitted to *Chemometrics and Intelligent Laboratory Systems*.
 
-## Setup
+## Installation
 
-Use Python 3.10 and an environment with PyTorch installed. A tested CPU setup can be installed with:
+Use Python 3.10 with PyTorch installed, then run:
 
 ```bash
-python -m pip install torch==2.4.1
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
 ```
-
-For CUDA, install the PyTorch build for your GPU using the [official installer](https://pytorch.org/get-started/locally/), then install `requirements.txt`. The locally tested dependency versions are listed in `requirements-tested.txt`.
 
 ## Run
 
-Open the repository in PyCharm, select the Python environment, and run `run.py`. Its `EXPERIMENT` setting selects one of the following entry points. The CSV is included in `data/`, and paths are resolved relative to the code.
+Open the project in PyCharm and run `run.py`. Set `EXPERIMENT` to:
 
-| Entry point | Experiments |
+| Value | Experiment |
 | --- | --- |
-| `main` | Full-spectrum residual GAT + LightGBM; configurable ablation, k sensitivity, and waveband experiments |
-| `analysis` | Feature ablation, k sensitivity, 16/32/48-waveband comparisons, visible/NIR comparisons, and spectral LightGBM | 
-| `baselines` | GraphSAGE, GCN, GIN, and standard GAT |
+| `main` | Residual GAT + LightGBM |
+| `analysis` | Ablation, k sensitivity, wavelength attribution and waveband reduction |
+| `baselines` | GraphSAGE, GCN, GIN and standard GAT, each followed by LightGBM |
 
-The main model and analysis experiments have separate training configurations. Each entry point records its own configuration and outputs. Change settings in the corresponding `experiments/<entry>/config.py`. In the main-model launcher, set `EXPERIMENTS = ["all"]` to run all its experiment groups.
+Adjust settings in `experiments/<entry>/config.py`. Neural encoders use up to 50 epochs, validation after every epoch and early stopping with patience 5. Results are saved to `results_*` under the selected entry.
 
-Command-line examples, from the repository root:
+## Data and licence
 
-```bash
-python run.py --check
-python run.py --experiment main
-python run.py --experiment analysis
-python run.py --experiment baselines
-```
+The CSV is included in `data/`. Acquisitions 1–4 are used for training, Acq5 for validation and Acq6 for testing.
 
-The code is organised as follows:
-
-```text
-run.py                  # Select and run an experiment
-experiments/
-  main/                 # Residual GAT + LightGBM
-  analysis/             # Ablation, k sensitivity, attribution, and wavebands
-  baselines/            # GraphSAGE, GCN, GIN, and standard GAT
-data/                   # Dataset and attribution
-```
-
-Each experiment directory contains `config.py` for run settings, `model.py` for the shared model definitions, and `pipeline.py` for the experiment workflow. Baseline architectures are in `experiments/baselines/models.py`.
-
-Results are written under each entry point's `results_*` directory. Outputs include per-run and summary CSVs, checkpoints, validation records, attribution rankings, selected wavebands, and test predictions. Existing completed tasks are reused only when their recorded configuration matches.
-
-## Data and evaluation
-
-The unmodified dataset is distributed with attribution under CC BY 4.0. Its source, authors, licence, and checksum are given in [data/README.md](data/README.md).
-
-The experiments use five concentration classes: 0%, 5%, 10%, 25%, and 50%. The fixed cohort filter excludes `Brand=C4`, `Class=ManukaUMF10`, `Concentration_Class=50`. After filtering, Acquisitions 1–4 contain 5600 training spectra, Acquisition 5 contains 1400 validation spectra, and Acquisition 6 contains 1400 test spectra, each with 128 wavelengths.
-
-## Checks
-
-```bash
-python check_installation.py
-python check_installation.py --tests
-```
-
-The first command checks dependencies, CSV loading, and all three entry points. `--tests` also runs the existing protocol and regression tests with mock or small synthetic fixtures.
-
-`reference_model.py` and the text files in `architecture_sources/` are reference snapshots for these regression tests. Run experiments through the documented entry points.
-
-## Licence
-
-Project code is provided under the [MIT licence](LICENSE). The bundled third-party dataset retains its [CC BY 4.0 licence and attribution](data/README.md). Dependencies retain their own licences.
+Code: [MIT](LICENSE). Dataset: [CC BY 4.0; source and attribution](data/README.md).

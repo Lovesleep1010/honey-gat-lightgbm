@@ -1,0 +1,14 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.idea/
+.vscode/
+.venv/
+venv/
+.env
+results_*/
+*.pt
+*.pth
+*.npz
+*.pkl
+*.log
