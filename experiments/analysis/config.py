@@ -19,8 +19,7 @@ CHECK_ONLY = False
 
 # 留空时自动读取仓库 data/ 下的 CSV；也可填写自己的路径。
 DATA_FILE = ""
-# 留空自动用 results_5epochs_c4filtered_multiband 等新目录。
-# 改种子/k/波段数量/设备等配置后，请换一个新结果目录。
+
 OUTPUT_FOLDER = ""
 # ======================================================
 
