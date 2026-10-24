@@ -19,7 +19,7 @@ For CUDA, install the PyTorch build for your GPU using the [official installer](
 Open the repository in PyCharm, select the Python environment, and run `run.py`. Its `EXPERIMENT` setting selects one of the following entry points. The CSV is included in `data/`, and paths are resolved relative to the code.
 
 | Entry point | Experiments |
-| --- | --- | --- |
+| --- | --- |
 | `main` | Full-spectrum residual GAT + LightGBM; configurable ablation, k sensitivity, and waveband experiments |
 | `analysis` | Feature ablation, k sensitivity, 16/32/48-waveband comparisons, visible/NIR comparisons, and spectral LightGBM | 
 | `baselines` | GraphSAGE, GCN, GIN, and standard GAT |
