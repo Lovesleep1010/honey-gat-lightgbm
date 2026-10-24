@@ -1,0 +1,42 @@
+class SAGEEncoder(nn.Module):
+    def __init__(self, in_dim=3, hid=128, dropout=0.5, num_classes=5):
+        super().__init__()
+        self.dropout = dropout
+        self.enc = nn.Linear(in_dim, hid)
+
+        # GraphSAGE (mean aggregator)
+        self.sage1 = SAGEConv(hid, hid)
+        self.norm1 = nn.LayerNorm(hid)
+
+        self.sage2 = SAGEConv(hid, hid)
+        self.norm2 = nn.LayerNorm(hid)
+
+        self.head = nn.Sequential(
+            nn.Linear(hid * 2, hid),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hid, num_classes)
+        )
+
+    def forward(self, data):
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+
+        x = self.enc(x)
+        x = F.relu(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+        x = self.sage1(x, edge_index)
+        x = self.norm1(x)
+        x = F.relu(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+        x = self.sage2(x, edge_index)
+        x = self.norm2(x)
+        x = F.relu(x)
+
+        g_mean = global_mean_pool(x, batch)
+        g_max = global_max_pool(x, batch)
+        emb = torch.cat([g_mean, g_max], dim=1)
+
+        logits = self.head(emb)
+        return emb, logits

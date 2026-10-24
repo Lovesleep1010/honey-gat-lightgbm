@@ -1,0 +1,8 @@
+# Keep an existing working CUDA PyTorch installation. Install torch separately
+# using its official Windows/CUDA selector only if it is missing.
+numpy>=1.26
+pandas>=2.0
+scipy>=1.11
+scikit-learn>=1.4
+lightgbm==4.6.0
+torch-geometric==2.6.1

@@ -1,0 +1,476 @@
+# -*- coding: utf-8 -*-
+"""
+Strict Split + SG(0/1/2) + Class-Weighted Training (GAT + LightGBM)
+
+Goal:
+- Improve 0% class recall on the hardest blind test (Acq 6) by increasing its training weight.
+
+Split:
+- Train: Acq 1-4
+- Val:   Acq 5  (model selection / early stopping)
+- Test:  Acq 6  (final blind test ONLY)
+
+Key idea:
+1) GAT encoder uses CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
+2) LightGBM uses class_weight (and optionally sample_weight)
+加权保护
+SG3 + strict split + class-weighted (GAT+LGB multiclass)
+"""
+
+import os
+import random
+import warnings
+import numpy as np
+import pandas as pd
+from scipy.signal import savgol_filter
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from torch_geometric.data import Data
+from torch_geometric.loader import DataLoader
+from torch_geometric.nn import GATConv, global_mean_pool, global_max_pool
+
+from sklearn.metrics import balanced_accuracy_score, f1_score, confusion_matrix, classification_report
+import lightgbm as lgb
+
+# =========================
+# 0) Settings & Utils
+# =========================
+warnings.filterwarnings("ignore")
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+
+def seed_everything(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.benchmark = True  # speed; set False for strict determinism
+
+
+def snv(X: np.ndarray):
+    """Standard Normal Variate (per-spectrum). No cross-sample statistics."""
+    m = X.mean(axis=1, keepdims=True)
+    s = X.std(axis=1, keepdims=True) + 1e-8
+    return (X - m) / s
+
+
+def compute_class_weights(y_train: np.ndarray, num_classes: int = 5,
+                          boost0: float = 2.0, mode: str = "effective") -> np.ndarray:
+    """
+    Compute class weights from training labels only.
+
+    mode:
+      - "inverse": w_c = N / (K * n_c)
+      - "effective": Effective number of samples (Cui et al.), more stable for imbalanced data.
+
+    boost0:
+      Additional multiplier for class 0 (0% concentration).
+      Recommended range: 1.5 ~ 3.0 (start with 2.0).
+    """
+    counts = np.bincount(y_train, minlength=num_classes).astype(np.float32)
+    counts = np.clip(counts, 1.0, None)
+    N = counts.sum()
+
+    if mode == "inverse":
+        w = N / (num_classes * counts)
+    else:
+        # effective number of samples
+        beta = 0.9999
+        eff_num = 1.0 - np.power(beta, counts)
+        w = (1.0 - beta) / eff_num
+
+    # normalize average weight ~ 1
+    w = w / (w.mean() + 1e-8)
+
+    # boost class 0
+    w[0] *= boost0
+    # renormalize again for stability
+    w = w / (w.mean() + 1e-8)
+
+    return w.astype(np.float32)
+
+
+# =========================
+# 1) Graph & Feature Engineering
+# =========================
+def build_hybrid_edge_index(x_train: np.ndarray, top_k=12):
+    """
+    Build graph structure using TRAIN set only:
+    - Correlation Top-k (long-range spectral dependency)
+    - Sequential edges (physical adjacency)
+    - Self-loops
+    """
+    print(f"[Graph] Building Hybrid Graph on Train Set {x_train.shape} ...")
+
+    corr = np.corrcoef(x_train.T)
+    abs_corr = np.abs(corr)
+    num_nodes = x_train.shape[1]
+
+    edges = set()
+
+    # A) Correlation edges
+    for i in range(num_nodes):
+        top_idx = np.argsort(abs_corr[i])[-(top_k + 1):][::-1]
+        neigh = [j for j in top_idx if j != i][:top_k]
+        for j in neigh:
+            edges.add((i, j))
+            edges.add((j, i))
+
+    # B) Sequential edges
+    for i in range(num_nodes - 1):
+        edges.add((i, i + 1))
+        edges.add((i + 1, i))
+
+    # C) Self-loops
+    for i in range(num_nodes):
+        edges.add((i, i))
+
+    edge_index = torch.tensor(list(edges), dtype=torch.long).t().contiguous()
+    print(f"[Graph] nodes={num_nodes}, edges={edge_index.shape[1]}")
+    return edge_index
+
+
+def spectrum_to_graph_sg3(x_128: np.ndarray, y_int: int, edge_index: torch.Tensor) -> Data:
+    """
+    SG features only:
+    - s0: smoothed spectrum
+    - d1: 1st derivative
+    - d2: 2nd derivative
+    """
+    s = x_128.astype(np.float32)
+
+    win = 15
+    poly = 3
+    s0 = savgol_filter(s, window_length=win, polyorder=poly, deriv=0).astype(np.float32)
+    d1 = savgol_filter(s, window_length=win, polyorder=poly, deriv=1).astype(np.float32)
+    d2 = savgol_filter(s, window_length=win, polyorder=poly, deriv=2).astype(np.float32)
+
+    node_feat = np.stack([s0, d1 * 10.0, d2 * 100.0], axis=1).astype(np.float32)  # [128,3]
+
+    return Data(
+        x=torch.from_numpy(node_feat),
+        edge_index=edge_index,
+        y=torch.tensor(y_int, dtype=torch.long),
+    )
+
+
+# =========================
+# 2) GAT Encoder
+# =========================
+class GATEncoder(nn.Module):
+    def __init__(self, in_dim=3, hid=64, heads=4, dropout=0.5, num_classes=5):
+        super().__init__()
+        self.dropout = dropout
+
+        self.enc = nn.Linear(in_dim, hid)
+
+        self.gat1 = GATConv(hid, hid, heads=heads, concat=True, dropout=dropout)
+        self.norm1 = nn.LayerNorm(hid * heads)
+
+        self.gat2 = GATConv(hid * heads, hid, heads=1, concat=False, dropout=dropout)
+        self.norm2 = nn.LayerNorm(hid)
+
+        self.head = nn.Sequential(
+            nn.Linear(hid * 2, hid),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hid, num_classes)
+        )
+
+    def forward(self, data: Data):
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+
+        x = self.enc(x)
+        x = F.relu(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+        x = self.gat1(x, edge_index)
+        x = self.norm1(x)
+        x = F.relu(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+        x = self.gat2(x, edge_index)
+        x = self.norm2(x)
+        x = F.relu(x)
+
+        g_mean = global_mean_pool(x, batch)
+        g_max = global_max_pool(x, batch)
+        emb = torch.cat([g_mean, g_max], dim=1)
+
+        logits = self.head(emb)
+        return emb, logits
+
+
+def train_encoder_with_val(model, train_loader, val_loader, device,
+                           class_weights_t: torch.Tensor, epochs=50, lr=1e-3):
+    """
+    Train on Train(Acq1-4), select best checkpoint by Val(Acq5).
+    Uses class-weighted CrossEntropyLoss.
+    """
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    criterion = nn.CrossEntropyLoss(weight=class_weights_t, label_smoothing=0.05)
+
+    best_val_acc = 0.0
+
+    print("\n[Start GAT Training] (Class-weighted CE)")
+    for ep in range(1, epochs + 1):
+        # Train
+        model.train()
+        total_loss = 0.0
+        for data in train_loader:
+            data = data.to(device)
+            optimizer.zero_grad()
+            _, logits = model(data)
+            loss = criterion(logits, data.y)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item() * data.num_graphs
+
+        scheduler.step()
+
+        # Val
+        model.eval()
+        correct, total = 0, 0
+        with torch.no_grad():
+            for data in val_loader:
+                data = data.to(device)
+                _, logits = model(data)
+                pred = logits.argmax(dim=1)
+                correct += (pred == data.y).sum().item()
+                total += data.y.size(0)
+
+        val_acc = correct / max(total, 1)
+        train_loss = total_loss / max(len(train_loader.dataset), 1)
+
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            torch.save(model.state_dict(), "best_gat_encoder_strict_sg3_weighted.pt")
+
+        if ep % 10 == 0:
+            w_np = class_weights_t.detach().cpu().numpy()
+            print(f"Ep {ep:03d} | Train Loss {train_loss:.4f} | Val Acc (Acq5) {val_acc:.4f} | Best {best_val_acc:.4f}")
+            print(f"    class_weights={np.round(w_np, 3)}")
+
+    print(f"[GAT Done] Best Val Acc: {best_val_acc:.4f}")
+
+
+@torch.no_grad()
+def extract_embeddings(model: GATEncoder, loader, device):
+    model.eval()
+    embs, ys = [], []
+    for data in loader:
+        data = data.to(device)
+        emb, _ = model(data)
+        embs.append(emb.cpu().numpy())
+        ys.append(data.y.cpu().numpy())
+    return np.concatenate(embs, axis=0), np.concatenate(ys, axis=0)
+
+
+# =========================
+# 3) Main
+# =========================
+def main():
+    seed_everything(42)
+
+    # =============== 修改为你的路径 ===============
+    PATH = r"adulteration_dataset_26_08_2021.csv"
+    # ============================================
+
+    if not os.path.exists(PATH):
+        print(f"Error: File not found at {PATH}")
+        return
+
+    print(f"Loading data from {PATH}...")
+    df = pd.read_csv(PATH)
+    df["Concentration_Class"] = df["Concentration_Class"].astype(str)
+
+    keep = {"0", "5", "10", "25", "50"}
+    df = df[df["Concentration_Class"].isin(keep)].copy()
+    df = df.reset_index(drop=True)
+
+    # Spectral columns
+    spec_cols = [c for c in df.columns if str(c).endswith("nm")]
+    spec_cols.sort(key=lambda x: float(str(x).replace("nm", "")))
+
+    X_raw = df[spec_cols].to_numpy(np.float32)
+    X = snv(X_raw)
+
+    # Labels
+    classes_cc = ["0", "5", "10", "25", "50"]
+    cc2id = {c: i for i, c in enumerate(classes_cc)}
+    y = df["Concentration_Class"].map(cc2id).to_numpy(np.int64)
+
+    # Strict split by Acquisition
+    acq = df["Acquisition"].to_numpy()
+    train_idx = np.where(np.isin(acq, [1, 2, 3, 4]))[0]
+    val_idx   = np.where(np.isin(acq, [5]))[0]
+    test_idx  = np.where(np.isin(acq, [6]))[0]
+
+    print("\n[Strict Split Info]")
+    print(f"Train (Acq 1-4): {len(train_idx)}")
+    print(f"Val   (Acq 5)  : {len(val_idx)}  <- used for early stopping")
+    print(f"Test  (Acq 6)  : {len(test_idx)}  <- LOCKED until end")
+
+    # Compute class weights from TRAIN only
+    y_train_only = y[train_idx]
+    class_w = compute_class_weights(y_train_only, num_classes=5, boost0=2.0, mode="effective")
+    print(f"\n[Weights] class_weights (train-only, boosted class0): {np.round(class_w, 4)}")
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    class_weights_t = torch.tensor(class_w, dtype=torch.float32, device=device)
+
+    # Build graph using Train only
+    EDGE_INDEX = build_hybrid_edge_index(X[train_idx], top_k=12)
+
+    graphs_train = [spectrum_to_graph_sg3(X[i], int(y[i]), EDGE_INDEX) for i in train_idx]
+    graphs_val   = [spectrum_to_graph_sg3(X[i], int(y[i]), EDGE_INDEX) for i in val_idx]
+    graphs_test  = [spectrum_to_graph_sg3(X[i], int(y[i]), EDGE_INDEX) for i in test_idx]
+
+    train_loader = DataLoader(graphs_train, batch_size=128, shuffle=True)
+    val_loader   = DataLoader(graphs_val,   batch_size=256, shuffle=False)
+    test_loader  = DataLoader(graphs_test,  batch_size=256, shuffle=False)
+
+    print(f"[Device] {device}")
+
+    # ===== Stage 1: Train GAT encoder (class-weighted) =====
+    model = GATEncoder(in_dim=3, hid=64, heads=4, dropout=0.5, num_classes=5).to(device)
+    train_encoder_with_val(
+        model, train_loader, val_loader, device,
+        class_weights_t=class_weights_t,
+        epochs=50, lr=1e-3
+    )
+    model.load_state_dict(torch.load("best_gat_encoder_strict_sg3_weighted.pt", map_location=device))
+
+    # ===== Stage 2: Extract embeddings =====
+    print("Extracting embeddings...")
+    Xtr_emb, ytr   = extract_embeddings(model, train_loader, device)
+    Xval_emb, yval = extract_embeddings(model, val_loader, device)
+    Xte_emb, yte   = extract_embeddings(model, test_loader, device)
+
+    # ===== Stage 3: LightGBM (class_weight) =====
+    # class_weight: dict {class_id: weight}
+    lgb_class_weight = {i: float(class_w[i]) for i in range(5)}
+    print(f"[LGB] class_weight dict: { {k: round(v, 4) for k, v in lgb_class_weight.items()} }")
+
+    print("Training LightGBM (Early stopping on Val set, with class_weight)...")
+    lgbm = lgb.LGBMClassifier(
+        objective="multiclass",
+        num_class=5,
+        n_estimators=3000,
+        learning_rate=0.01,
+        num_leaves=31,
+        max_depth=-1,
+        min_child_samples=30,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        reg_alpha=0.1,
+        reg_lambda=5.0,
+        random_state=42,
+        n_jobs=-1,
+        verbosity=-1,
+        class_weight=lgb_class_weight
+    )
+
+    lgbm.fit(
+        Xtr_emb, ytr,
+        eval_set=[(Xval_emb, yval)],
+        eval_metric="multi_logloss",
+        callbacks=[lgb.early_stopping(stopping_rounds=100, verbose=True)]
+    )
+
+    best_iter = getattr(lgbm, "best_iteration_", None)
+    print(f"[LGB] best_iteration_ = {best_iter}")
+
+    # Optional: refit on Train+Val with best_iter (still not touching Test)
+    if best_iter is not None:
+        print("Refit LightGBM on Train+Val with best_iteration_ (no early stopping, class_weight kept)...")
+        X_trainval = np.vstack([Xtr_emb, Xval_emb])
+        y_trainval = np.concatenate([ytr, yval])
+
+        lgbm_final = lgb.LGBMClassifier(
+            objective="multiclass",
+            num_class=5,
+            n_estimators=int(best_iter),
+            learning_rate=0.01,
+            num_leaves=31,
+            max_depth=-1,
+            min_child_samples=30,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=0.1,
+            reg_lambda=5.0,
+            random_state=42,
+            n_jobs=-1,
+            verbosity=-1,
+            class_weight=lgb_class_weight
+        )
+        lgbm_final.fit(X_trainval, y_trainval)
+    else:
+        lgbm_final = lgbm
+
+    # ===== Stage 4: Final Blind Test =====
+    print("\n" + "=" * 40)
+    print(" FINAL BLIND TEST (Acq 6) ")
+    print("=" * 40)
+
+    pred = lgbm_final.predict(Xte_emb)
+    bal_acc = balanced_accuracy_score(yte, pred)
+    macro_f1 = f1_score(yte, pred, average="macro")
+
+    print(f"Test Balanced Acc: {bal_acc:.4f}")
+    print(f"Test Macro F1:     {macro_f1:.4f}")
+
+    print("\nConfusion Matrix (rows=true, cols=pred):")
+    print(confusion_matrix(yte, pred))
+
+    print("\nPer-class report:")
+    classes_cc = ["0", "5", "10", "25", "50"]
+    print(classification_report(yte, pred, target_names=classes_cc, digits=4))
+
+    print("=" * 40)
+
+    # Save model
+    try:
+        lgbm_final.booster_.save_model("lgbm_strict_sg3_weighted_final.txt")
+        print("\nSaved: lgbm_strict_sg3_weighted_final.txt")
+    except Exception as e:
+        print(f"\n[Warn] Could not save model: {e}")
+
+
+if __name__ == "__main__":
+    main()
+
+'''    accuracy                         0.9321      1400
+   macro avg     0.9436    0.9216    0.9297      1400
+weighted avg     0.9365    0.9321    0.9322      1400'''
+
+'''========================================
+ FINAL BLIND TEST (Acq 6) 
+========================================
+Test Balanced Acc: 0.9275
+Test Macro F1:     0.9332
+
+Confusion Matrix (rows=true, cols=pred):
+[[139  33   3   0   0]
+ [  3 287  10   3  22]
+ [  0   4 295   1   0]
+ [  1   2   3 293   1]
+ [  0   0   0   0 300]]
+
+Per-class report:
+              precision    recall  f1-score   support
+
+           0     0.9720    0.7943    0.8742       175
+           5     0.8804    0.8831    0.8817       325
+          10     0.9486    0.9833    0.9656       300
+          25     0.9865    0.9767    0.9816       300
+          50     0.9288    1.0000    0.9631       300
+
+    accuracy                         0.9386      1400
+   macro avg     0.9433    0.9275    0.9332      1400
+weighted avg     0.9396    0.9386    0.9376      1400'''

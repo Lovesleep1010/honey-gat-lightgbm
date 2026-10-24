@@ -1,0 +1,56 @@
+class GINEncoder(nn.Module):
+    def __init__(self, in_dim=3, hid=64, dropout=0.5, num_classes=5):
+        super().__init__()
+        self.dropout = dropout
+
+        # GIN 需要定义内部的 MLP
+        # Layer 1 MLP
+        self.mlp1 = nn.Sequential(
+            nn.Linear(in_dim, hid),
+            nn.BatchNorm1d(hid),
+            nn.ReLU(),
+            nn.Linear(hid, hid),
+            nn.BatchNorm1d(hid),
+            nn.ReLU(),
+        )
+        # GINConv 1
+        self.gin1 = GINConv(self.mlp1, train_eps=True)  # train_eps=True 让模型自己学习中心节点权重
+
+        # Layer 2 MLP
+        self.mlp2 = nn.Sequential(
+            nn.Linear(hid, hid),
+            nn.BatchNorm1d(hid),
+            nn.ReLU(),
+            nn.Linear(hid, hid),
+            nn.BatchNorm1d(hid),
+            nn.ReLU(),
+        )
+        # GINConv 2
+        self.gin2 = GINConv(self.mlp2, train_eps=True)
+
+        # Classification Head
+        self.head = nn.Sequential(
+            nn.Linear(hid * 2, hid),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hid, num_classes)
+        )
+
+    def forward(self, data: Data):
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+
+        # GIN Layer 1
+        x = self.gin1(x, edge_index)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+        # GIN Layer 2
+        x = self.gin2(x, edge_index)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+        # Pooling (Mean + Max)
+        g_mean = global_mean_pool(x, batch)
+        g_max = global_max_pool(x, batch)
+        emb = torch.cat([g_mean, g_max], dim=1)  # [B, 2*hid]
+
+        logits = self.head(emb)
+        return emb, logits

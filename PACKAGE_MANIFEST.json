@@ -1,0 +1,187 @@
+{
+  "package": "honey-gat-lightgbm",
+  "prepared_at": "2026-10-24T12:07:00+08:00",
+  "publication_status": "local files prepared for upload",
+  "validation": {
+    "status": "passed",
+    "main_tests": 23,
+    "analysis_tests": 14,
+    "baseline_tests": 25,
+    "total_tests": 62,
+    "data_entry_checks": 3
+  },
+  "files": {
+    ".gitignore": {
+      "bytes": 137,
+      "sha256": "e45861f28f4ba9b214dcdc3c6c7a86f457e45e257c014c8597b924d4f6bdc34f"
+    },
+    "LICENSE": {
+      "bytes": 1081,
+      "sha256": "681b46f147610336a243b3c72cd08cd5904b2dee747e74c959ae57ade9e6b9df"
+    },
+    "README.md": {
+      "bytes": 5216,
+      "sha256": "3bdba5f37e7ae12c2a8650959c0faff1a12998d0a602ad3f5e4319c7fb7fefdd"
+    },
+    "README_zh.md": {
+      "bytes": 2438,
+      "sha256": "108765ea2f826c7359965d4617a10cab71a6646d2e7ac9eb5ddb91222087652f"
+    },
+    "SOURCE_FILES.json": {
+      "bytes": 9972,
+      "sha256": "10f27a7298e73067da40e9c3ea27f035a370da9a1bd597db181cbe893fba68f8"
+    },
+    "VALIDATION.md": {
+      "bytes": 512,
+      "sha256": "a45d715cd1fd316f29235228a0656862332fb4f3b73901dc95f947c078607478"
+    },
+    "check_installation.py": {
+      "bytes": 993,
+      "sha256": "5d3506fd499f65b723c36e1d550273fa8a9f1230d14ff2a998e145a5eec19899"
+    },
+    "data/README.md": {
+      "bytes": 854,
+      "sha256": "a74e0806447732ff7faa7dee4cddb4563818a114fc7265aff4e6e8ba2cb89356"
+    },
+    "data/adulteration_dataset_26_08_2021.csv": {
+      "bytes": 13248930,
+      "sha256": "27c1ccf0c0e6aeeb144d4a58ee2da85a826bcd112a025cab6985a9774551893f"
+    },
+    "data/source.json": {
+      "bytes": 699,
+      "sha256": "aaccc64ad4a92dc932e37bee66cee42aeda8cef824911cf29a9a8ecbc4c037b0"
+    },
+    "experiments/analysis/config.py": {
+      "bytes": 2551,
+      "sha256": "1c750913f0f4bee40baac7b3449c0db869bd4e9d49e438b6ef8fd3594c62ba11"
+    },
+    "experiments/analysis/model.py": {
+      "bytes": 12466,
+      "sha256": "0fcedfd15a80e1499b2b74b22da588bad19d2820761195710077ce16a17c9b0d"
+    },
+    "experiments/analysis/pipeline.py": {
+      "bytes": 45014,
+      "sha256": "4a2ecc70f36b2659fd69e8519c670479afae14cf9a109cb26958076869f942c3"
+    },
+    "experiments/analysis/reference_model.py": {
+      "bytes": 20388,
+      "sha256": "57b8d26e128e29040245d27917dd6d41168e57f55c2fbb464cb39ab0c7d7b8a7"
+    },
+    "experiments/analysis/test_protocol.py": {
+      "bytes": 18264,
+      "sha256": "0bf644ad933e68937fcf6d336fb91df3fe7b6620a887858d1193024810c7c351"
+    },
+    "experiments/baselines/architecture_sources/main_6.py.class.txt": {
+      "bytes": 1290,
+      "sha256": "d77d42d8bacbeac4029b7c4d9e8fa802a9a759df3ebdd8fab52fbd27db938b5b"
+    },
+    "experiments/baselines/architecture_sources/main_6.py.original.txt": {
+      "bytes": 15445,
+      "sha256": "7aa6b2c37095edfd985e01cb265338864621b4cf24fcc799c69c7c9ef1c13d11"
+    },
+    "experiments/baselines/architecture_sources/main_GCN_2.py.class.txt": {
+      "bytes": 1271,
+      "sha256": "1b32b1a7cdafcd7be3b1a3aff1b85700d277e7e83e526a1bdb15093c8931cd7e"
+    },
+    "experiments/baselines/architecture_sources/main_GCN_2.py.original.txt": {
+      "bytes": 11703,
+      "sha256": "f30c8bdb8f09d5b3f221b3e5dc493e32120292c17f4779e05df25fedc0186a4f"
+    },
+    "experiments/baselines/architecture_sources/main_GIN_1.py.class.txt": {
+      "bytes": 1702,
+      "sha256": "bcf3b83fda9b3f8155d74481b09dc87f0dfff4a35f60ae6865925a1991da149e"
+    },
+    "experiments/baselines/architecture_sources/main_GIN_1.py.original.txt": {
+      "bytes": 12166,
+      "sha256": "e6ad5d68331fe081b7d71e024ff559182109c8b71196dc5bc335ce040e0f4e15"
+    },
+    "experiments/baselines/architecture_sources/main_SAGE.py.class.txt": {
+      "bytes": 1221,
+      "sha256": "b9915ad7c862285f0c60801377dbcf216f54722de41c2ec80ca12ab822a74221"
+    },
+    "experiments/baselines/architecture_sources/main_SAGE.py.original.txt": {
+      "bytes": 12440,
+      "sha256": "d652a4a5beb22e0f9bfd69bea2bea400d39db330edd45d620cc3c863ec0be47b"
+    },
+    "experiments/baselines/architecture_sources.json": {
+      "bytes": 2535,
+      "sha256": "e363db9649e6afdcdd0659b0059b02f75ee570da07b92971df8260691677afde"
+    },
+    "experiments/baselines/baseline_config.py": {
+      "bytes": 5817,
+      "sha256": "1ffbc8b7b46d3fcc592e0de07c667c172773dad61efe7135f833f998fd0312bc"
+    },
+    "experiments/baselines/compare.py": {
+      "bytes": 26104,
+      "sha256": "7e84b093c1f7822230d2560e20519285abb72e5593c98196feb4ec4eaebeb40b"
+    },
+    "experiments/baselines/config.py": {
+      "bytes": 2137,
+      "sha256": "1a7999055c34974c8b4437b90a1b0e0cff08664aebf9245138e11ab87a503a8d"
+    },
+    "experiments/baselines/model.py": {
+      "bytes": 12466,
+      "sha256": "0fcedfd15a80e1499b2b74b22da588bad19d2820761195710077ce16a17c9b0d"
+    },
+    "experiments/baselines/models.py": {
+      "bytes": 7891,
+      "sha256": "b3f19cf51fe488c2e20b468d8dc6a7c007a38650edec30405ebe7678a35027c9"
+    },
+    "experiments/baselines/pipeline.py": {
+      "bytes": 45014,
+      "sha256": "4a2ecc70f36b2659fd69e8519c670479afae14cf9a109cb26958076869f942c3"
+    },
+    "experiments/baselines/reference_model.py": {
+      "bytes": 20388,
+      "sha256": "57b8d26e128e29040245d27917dd6d41168e57f55c2fbb464cb39ab0c7d7b8a7"
+    },
+    "experiments/baselines/test_baselines.py": {
+      "bytes": 19616,
+      "sha256": "1145aaed1b240235aff86388d27a12ead0637cb1bb555b50321ff7b60fbef5ea"
+    },
+    "experiments/baselines/test_protocol.py": {
+      "bytes": 18264,
+      "sha256": "0bf644ad933e68937fcf6d336fb91df3fe7b6620a887858d1193024810c7c351"
+    },
+    "experiments/baselines/training.py": {
+      "bytes": 3377,
+      "sha256": "bfbc7bb3a2f0a8a2772381391d56097efaa8a2e199736a151c60dcd4c1bffa15"
+    },
+    "experiments/main/config.py": {
+      "bytes": 2686,
+      "sha256": "07ae1786a751819c494b87ecf4b7227268062bc3ecd13624c04e6d4347734dea"
+    },
+    "experiments/main/model.py": {
+      "bytes": 13710,
+      "sha256": "f16c99970e89ac8148d716cd674f3e1deba6a52c8294e5ba370ea1507e93fb3d"
+    },
+    "experiments/main/pipeline.py": {
+      "bytes": 46640,
+      "sha256": "e47219504d5395359061df261d4f26874e6683b84b84934379d247504d94b347"
+    },
+    "experiments/main/reference_model.py": {
+      "bytes": 20388,
+      "sha256": "57b8d26e128e29040245d27917dd6d41168e57f55c2fbb464cb39ab0c7d7b8a7"
+    },
+    "experiments/main/test_early_stopping.py": {
+      "bytes": 5357,
+      "sha256": "7e618fe17dbf85aec6385f9356978fcb5d90dc8b5e386c595f545a99249f7cea"
+    },
+    "experiments/main/test_protocol.py": {
+      "bytes": 17589,
+      "sha256": "c61b749fccdc52393c20c9b1b4840595c4706e5aa25dbc6a89d4b4d6eaead73c"
+    },
+    "requirements-tested.txt": {
+      "bytes": 113,
+      "sha256": "e3717ed590959d7fd0c3ffb7e72322a1838d8aff2d85fad0f9be064012c03aeb"
+    },
+    "requirements.txt": {
+      "bytes": 238,
+      "sha256": "8a36d1cc21c1965bde1072aa06c9f240d0e945cdfc3642ebbf71afd48dfcd5a5"
+    },
+    "run.py": {
+      "bytes": 975,
+      "sha256": "7e91cd2988b0bcaa87459a270e8222c9c6b13894c04a8d1cc22a39681462cb3f"
+    }
+  }
+}
