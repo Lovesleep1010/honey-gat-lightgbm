@@ -1,18 +1,18 @@
 from pathlib import Path
 
 
-MODELS = ["graphsage", "gcn", "gin", "gat"]  # gat 是普通 GAT，无残差连接
+MODELS = ["graphsage", "gcn", "gin", "gat"]  
 SEEDS = [42, 123, 2024, 3407, 9999]
 EPOCHS = 50                  
-SCHEDULER_EPOCHS = None     # None保留原配置：SAGE/GCN=60，GIN/GAT=50
-DEVICE = "auto"            # 有 CUDA 用 GPU；否则 CPU；可填 "cuda" / "cpu"
+SCHEDULER_EPOCHS = None    
+DEVICE = "auto"            
 CPU_THREADS = 4
 STAGE = "all"              
 RESUME = True             
 CHECK_ONLY = False         
 
-DATA_FILE = ""             # 留空时自动读取仓库 data/ 下的 CSV
-OUTPUT_FOLDER = ""         # 留空用 results_table1_gnn_original_5epochs
+DATA_FILE = ""             
+OUTPUT_FOLDER = ""        
 
 
 HERE = Path(__file__).resolve().parent
