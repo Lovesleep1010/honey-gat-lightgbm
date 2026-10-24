@@ -1,4 +1,5 @@
 # Honey classification with residual GAT and LightGBM
+This repository contains the code for our manuscript “Cross-acquisition hyperspectral modelling for honey adulteration using wavelength-graph representation and reduced-waveband analysis”, submitted to Chemometrics and Intelligent Laboratory Systems.
 
 Python implementation of residual GAT + LightGBM for hyperspectral honey-adulteration classification. The repository includes feature ablation, correlation-neighbour sensitivity, wavelength attribution, reduced-waveband experiments, spectral LightGBM, and four GNN comparators.
 
