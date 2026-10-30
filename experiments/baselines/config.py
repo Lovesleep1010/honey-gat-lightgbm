@@ -3,7 +3,7 @@ import sys
 
 
 MODELS = ["graphsage", "gcn", "gin", "gat"]
-SEEDS = [42, 123, 2024, 3407, 9999]
+SEEDS = [2026, 2027, 2028, 2029, 2030]
 EPOCHS = 50
 EARLY_STOPPING_PATIENCE = 5
 SCHEDULER_EPOCHS = None

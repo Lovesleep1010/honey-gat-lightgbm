@@ -24,7 +24,7 @@ from models import MODEL_LABELS, MODEL_ORDER, build_encoder, model_spec
 
 HERE = Path(__file__).resolve().parent
 
-DEFAULT_SEEDS = [42, 123, 2024, 3407, 9999]
+DEFAULT_SEEDS = [2026, 2027, 2028, 2029, 2030]
 PLAN_FILE = "plan_table1_gnn.json"
 METRIC_NAMES = ("accuracy", "balanced_accuracy", "macro_f1", "recall0")
 
