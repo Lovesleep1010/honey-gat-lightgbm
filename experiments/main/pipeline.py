@@ -19,6 +19,7 @@ from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 
 import model as core
+from graph_structures import build_edge_index
 
 HERE = Path(__file__).resolve().parent
 CLASSES = [0, 5, 10, 25, 50]
@@ -146,14 +147,13 @@ def make_graphs(raw, y, bands, edges, wavelengths):
     selected = select_raw(raw, bands)
     normalized = core.snv(selected)
     if np.array_equal(bands, np.arange(len(wavelengths))):
-        return [core.spectrum_to_graph_sg3(x, int(label), edges, use_pos=True)
+        return [core.spectrum_to_graph_sg3(x, int(label), edges)
                 for x, label in zip(normalized, y)]
     mats = local_polynomial_matrices(wavelengths[bands], wavelengths)
-    pos = ((wavelengths[bands] - wavelengths[0]) / (wavelengths[-1] - wavelengths[0])).astype(np.float32)
     graphs = []
     for x, label in zip(normalized, y):
         smooth, d1, d2 = (m @ x for m in mats)
-        feats = np.stack([smooth, d1 * 10.0, d2 * 100.0, pos], axis=1).astype(np.float32)
+        feats = np.stack([smooth, d1 * 10.0, d2 * 100.0], axis=1).astype(np.float32)
         graphs.append(Data(x=torch.from_numpy(feats), edge_index=edges, y=torch.tensor(int(label), dtype=torch.long)))
     return graphs
 
@@ -205,11 +205,17 @@ def task_folder(root, task_id):
     return root / "tasks" / task_id
 
 
-def fit_encoder(root, tv, cfg, seed, k, bands, task_id):
+def fit_encoder(root, tv, cfg, seed, k, bands, task_id, graph_mode="full"):
     folder = task_folder(root, task_id)
     if (folder / "selection.json").exists():
+        state = torch.load(folder / "encoder.pt", map_location="cpu", weights_only=True)
+        if state["enc.weight"].shape[1] != 3:
+            raise ValueError(f"{task_id} has an incompatible encoder; three node features are required")
+        info = load_task(folder)
+        if info.get("graph_mode", "full") != graph_mode:
+            raise ValueError(f"{task_id} has a different graph structure")
         print(f"[Reuse] {task_id}", flush=True)
-        return load_task(folder)
+        return info
     folder.mkdir(parents=True, exist_ok=True)
     start = time.perf_counter()
     write_json(folder / "status.json", {"status": "training", "task": task_id})
@@ -219,9 +225,9 @@ def fit_encoder(root, tv, cfg, seed, k, bands, task_id):
     gtr, mu, sd = global_stats(select_raw(tv.train.raw, bands))
     gval, _, _ = global_stats(select_raw(tv.val.raw, bands), mu, sd)
     normalized_train = core.snv(select_raw(tv.train.raw, bands))
-    if not np.isfinite(np.corrcoef(normalized_train.T)).all():
+    if graph_mode == "full" and not np.isfinite(np.corrcoef(normalized_train.T)).all():
         raise ValueError("Training-only graph correlations contain NaN; check constant channels")
-    edges = core.build_hybrid_edge_index(normalized_train, top_k=k)
+    edges = build_edge_index(normalized_train, graph_mode, top_k=k)
     train_graphs = make_graphs(tv.train.raw, tv.train.y, bands, edges, tv.wavelengths)
     val_graphs = make_graphs(tv.val.raw, tv.val.y, bands, edges, tv.wavelengths)
     sampler = WeightedRandomSampler(class_weights[tv.train.y].astype(np.float64),
@@ -229,7 +235,7 @@ def fit_encoder(root, tv, cfg, seed, k, bands, task_id):
     train_loader = DataLoader(train_graphs, batch_size=128, sampler=sampler, shuffle=False)
     embed_loader = DataLoader(train_graphs, batch_size=256, shuffle=False)
     val_loader = DataLoader(val_graphs, batch_size=256, shuffle=False)
-    model = core.GATEncoder(in_dim=4, hid=64, heads=4, dropout=0.5, num_classes=5).to(device)
+    model = core.GATEncoder(in_dim=3, hid=64, heads=4, dropout=0.5, num_classes=5).to(device)
     history = []
 
     def log(record):
@@ -259,7 +265,8 @@ def fit_encoder(root, tv, cfg, seed, k, bands, task_id):
                         global_mean=mu, global_std=sd, edges=edges.numpy(),
                         train_rows=tv.train.rows, val_rows=tv.val.rows)
     info = dict(task_id=task_id, kind="gat", features="embedding_global", seed=seed,
-                k=k, n_bands=len(bands), bands=bands.tolist(), selected_epoch=int(ep),
+                k=k if graph_mode == "full" else 0, graph_mode=graph_mode, graph_edges=int(edges.shape[1]),
+                n_bands=len(bands), bands=bands.tolist(), node_features=3, selected_epoch=int(ep),
                 selected_probe_val_ba=float(probe_ba), epochs=cfg["epochs"],
                 scheduler_epochs=cfg["scheduler_epochs"], encoder_task=task_id,
                 epochs_completed=int(history[-1]["epoch"]),
@@ -552,7 +559,7 @@ def evaluate_requested(root, cfg, plan_path, data_path):
                                 probabilities=probabilities, row_indices=test.rows)
             evaluated = dict(task_id=task, acquisition=6, metrics=metrics(test.y, predictions))
             write_json(folder / "test_metrics.json", evaluated)
-        row = {key: info.get(key) for key in ("task_id", "kind", "features", "seed", "k", "n_bands", "selected_epoch", "gbm_best_iteration", "tau0", "selection_family", "spectral_region",
+        row = {key: info.get(key) for key in ("task_id", "kind", "features", "seed", "k", "n_bands", "node_features", "selected_epoch", "gbm_best_iteration", "tau0", "selection_family", "spectral_region",
                 "epochs", "epochs_completed", "early_stopping_patience", "early_stopping_triggered", "stop_reason")}
         row["selection_family"] = info.get("selection_family", "full_spectrum" if info["n_bands"] == 128 else "hybrid_gat_raw_rank")
         selected_wls = wavelengths[np.array(info["bands"], dtype=np.int64)]
@@ -681,18 +688,18 @@ def configure_run(args, root):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=HERE.parents[1] / "data" / "adulteration_dataset_26_08_2021.csv")
-    parser.add_argument("--output", type=Path, default=HERE / "results_max50_patience5_c4filtered")
+    parser.add_argument("--output", type=Path, default=HERE / "results_3features_max50_patience5_c4filtered")
     parser.add_argument("--experiments", nargs="+", choices=["all", "baseline", "ablation", "k", "bands"], default=["baseline"])
     parser.add_argument("--stage", choices=["fit", "evaluate", "all"], default="all")
     parser.add_argument("--epochs", type=int, default=50, help="Maximum encoder epochs")
     parser.add_argument("--scheduler-epochs", type=int, default=50)
     parser.add_argument("--early-stopping-patience", type=int, default=5,
                         help="Stop after this many consecutive epochs without an Acq5 downstream BA improvement")
-    parser.add_argument("--seeds", nargs="+", type=int, default=[42, 123, 2024, 3407, 9999])
+    parser.add_argument("--seeds", nargs="+", type=int, default=[2026, 2027, 2028, 2029, 2030])
     parser.add_argument("--k-values", nargs="+", type=int, default=[8, 10, 12, 14, 16])
     parser.add_argument("--band-counts", nargs="+", type=int, default=[16, 32, 48])
     parser.add_argument("--sparse-k", type=int, default=8)
-    parser.add_argument("--ranking-seed", type=int, default=42)
+    parser.add_argument("--ranking-seed", type=int, default=2026)
     parser.add_argument("--permutation-repeats", type=int, default=5)
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")

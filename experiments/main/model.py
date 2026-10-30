@@ -84,8 +84,7 @@ def build_hybrid_edge_index(x_train: np.ndarray, top_k=12):
     return edge_index
 
 
-def spectrum_to_graph_sg3(x_128: np.ndarray, y_int: int, edge_index: torch.Tensor,
-                          use_pos: bool = True) -> Data:
+def spectrum_to_graph_sg3(x_128: np.ndarray, y_int: int, edge_index: torch.Tensor) -> Data:
     s = x_128.astype(np.float32)
     win = 15
     poly = 3
@@ -94,9 +93,6 @@ def spectrum_to_graph_sg3(x_128: np.ndarray, y_int: int, edge_index: torch.Tenso
     d2 = savgol_filter(s, window_length=win, polyorder=poly, deriv=2).astype(np.float32)
 
     feats = [s0, d1 * 10.0, d2 * 100.0]
-    if use_pos:
-        pos = np.linspace(0.0, 1.0, num=s.shape[0], dtype=np.float32)
-        feats.append(pos)
 
     node_feat = np.stack(feats, axis=1).astype(np.float32)
 
@@ -123,7 +119,7 @@ def make_global_features_from_raw(X_raw: np.ndarray):
 
 
 class GATEncoder(nn.Module):
-    def __init__(self, in_dim=4, hid=64, heads=4, dropout=0.5, num_classes=5):
+    def __init__(self, in_dim=3, hid=64, heads=4, dropout=0.5, num_classes=5):
         super().__init__()
         self.dropout = dropout
         self.hid = hid
