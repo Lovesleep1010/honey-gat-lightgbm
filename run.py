@@ -5,7 +5,7 @@ import sys
 
 EXPERIMENT = "main"
 CHECK_ONLY = False
-ENTRIES = ("main", "analysis", "baselines")
+ENTRIES = ("main", "analysis", "baselines", "graph_structure")
 ROOT = Path(__file__).resolve().parent
 
 
