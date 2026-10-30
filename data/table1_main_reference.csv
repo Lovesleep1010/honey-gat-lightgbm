@@ -1,0 +1,6 @@
+﻿task_id,kind,features,seed,k,n_bands,selected_epoch,gbm_best_iteration,tau0,selection_family,spectral_region,epochs,epochs_completed,early_stopping_patience,early_stopping_triggered,stop_reason,n_vis,n_nir,band_reduction_fraction,accuracy,balanced_accuracy,macro_f1,recall0
+full_k12_seed2026,gat,embedding_global,2026,12,128,1,793,0.41,full_spectrum,,50,6,5,True,patience_exhausted,59,69,0.0,0.9628571428571429,0.9445347985347986,0.9535572070861097,0.7485714285714286
+full_k12_seed2027,gat,embedding_global,2027,12,128,11,888,0.47,full_spectrum,,50,16,5,True,patience_exhausted,59,69,0.0,0.96,0.9416483516483517,0.9503782806741414,0.7428571428571429
+full_k12_seed2028,gat,embedding_global,2028,12,128,1,2022,0.09,full_spectrum,,50,6,5,True,patience_exhausted,59,69,0.0,0.9707142857142858,0.9628205128205127,0.9661470332525426,0.88
+full_k12_seed2029,gat,embedding_global,2029,12,128,2,2757,0.05,full_spectrum,,50,7,5,True,patience_exhausted,59,69,0.0,0.9571428571428572,0.9509597069597069,0.9487439996572515,0.8742857142857143
+full_k12_seed2030,gat,embedding_global,2030,12,128,2,2979,0.44,full_spectrum,,50,7,5,True,patience_exhausted,59,69,0.0,0.9528571428571428,0.9326666666666666,0.9414927798998841,0.72
